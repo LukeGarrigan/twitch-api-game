@@ -1,17 +1,24 @@
 JSONObject json;
 import java.util.*;
 PImage backgroundImage;
-public static final float MAX_SPEED = 2;
-public static final float MIN_SPEED = -2;
+public static final float MAX_SPEED = 20;
+public static final float MIN_SPEED = -20;
 public static final float START_SIZE = 30;
+public static final int NUMBER_OF_BOOSTS = 5;
+
+public static final String streamName = "codeheir";
+int apiCallCount = 0;
 
 Set<String> twitchViewers;
 Set<Circle> viewerCircles;
 
+List<Boost> boosts;
+
+
 void setup() {
-  size(904, 601);
-  backgroundImage = loadImage("twitch_background.png");
-  json = loadJSONObject("https://tmi.twitch.tv/group/user/codeheir/chatters");
+  size(1805, 761);
+  backgroundImage = loadImage("twitch_background_2.png");
+  json = loadJSONObject("https://tmi.twitch.tv/group/user/" +streamName+"/chatters");
   JSONObject chatters = json.getJSONObject("chatters");
   JSONArray names = chatters.getJSONArray("viewers");
   JSONArray moderators = chatters.getJSONArray("moderators");
@@ -29,22 +36,94 @@ void setup() {
   
   viewerCircles = new HashSet<Circle>();
   for (String viewerName: twitchViewers) {
-    viewerCircles.add(new Circle(viewerName, random(width/2)+50, random(height/2)+50, START_SIZE));
+    viewerCircles.add(new Circle(viewerName, random(width-(START_SIZE*2)), random(height-(START_SIZE*2)), START_SIZE));
   }
    
+   
+  boosts = new ArrayList<Boost>(); 
+  for (int i = 0; i < NUMBER_OF_BOOSTS; i++) {
+    boosts.add(new Boost(random(width-15), random(height-15)));
+  }
+   
+    
 }
 
 void draw() {
+  apiCallCount++;
+  if (apiCallCount % 900 == 0) {
+    thread("getNewPlayers");
+  }
+  
   clear();
   background(backgroundImage);
     
+  for (Boost boost: boosts) {
+    boost.drawBoost();
+  }  
   for (Circle viewer: viewerCircles) {
     viewer.processCircle();
   }
   
+  displayNumberOfPlayers();
   displayTopScores();
+}
 
+void getNewPlayers() {
+  json = loadJSONObject("https://tmi.twitch.tv/group/user/" +streamName+"/chatters");
+  JSONObject chatters = json.getJSONObject("chatters");
+  JSONArray names = chatters.getJSONArray("viewers");  
+  JSONArray moderators = chatters.getJSONArray("moderators");
+   
+   
+  Set<String> newNames = new HashSet<String>();
+  for (int i = 0; i < names.size(); i++ ) {
+     checkIfPlayerExistsAndAdd(names.get(i).toString().trim(), newNames); 
+  }
+  for (int i = 0; i < moderators.size(); i++ ) {
+     checkIfPlayerExistsAndAdd(moderators.get(i).toString().trim(), newNames); 
+  }
+  
+  // check against existing players
+  List<String> namesToBeRemoved = new ArrayList<String>();
+  for (String oldName: twitchViewers) {
+    if (!newNames.contains(oldName)){ 
+       namesToBeRemoved.add(oldName);
+    }
+  }
+  
+  removeStreamLeaversFromGame(namesToBeRemoved);
+  
+  
+  
+  twitchViewers = newNames;
+}
 
+private void checkIfPlayerExistsAndAdd(String viewerName, Set<String> newNames) {
+     newNames.add(viewerName);
+     Circle newPlayer = new Circle(viewerName, random(width-(START_SIZE*2)), random(height-(START_SIZE*2)), START_SIZE);
+     if(!viewerCircles.contains(newPlayer)) {
+       viewerCircles.add(newPlayer);
+     }
+ }
+private void removeStreamLeaversFromGame(List<String> namesToBeRemoved) {
+  
+  Set<Circle> copyOfCurrentPlayers = new HashSet<Circle>();
+  for (Circle circle: viewerCircles) {
+    copyOfCurrentPlayers.add(circle);
+  }
+  
+  List<Circle> circleToBeRemoved = new ArrayList<Circle>();
+  for (String name: namesToBeRemoved) {
+    for (Circle circle: copyOfCurrentPlayers) {
+      if (circle.getName().equals(name)) {
+        circleToBeRemoved.add(circle);
+      }
+    }
+  }
+  
+  copyOfCurrentPlayers.removeAll(circleToBeRemoved);
+  
+  viewerCircles = copyOfCurrentPlayers;
 }
 
 public void displayTopScores() {  
@@ -70,6 +149,50 @@ public void displayTopScores() {
   }
   
   
+}
+
+public void displayNumberOfPlayers() {
+  fill(0);
+  text("Number of players " + viewerCircles.size(), width/2, 20);
+}
+
+public class Boost {
+  private float x;
+  private float y;
+  private float size;
+  private PImage image;
+  private boolean visible;
+  
+  // size is irrelevant 
+  public Boost(float x, float y) {
+    this.x = x;
+    this.y = y;
+    this.size = 75;
+    this.image = loadImage("boosts.png");
+    this.visible = true;
+  }
+  
+  
+  public void drawBoost() {
+    if (visible) {
+      image(image, x, y); 
+      checkCollision();
+    }
+  }
+  
+  public void checkCollision() {
+    
+    for (Circle circle: viewerCircles) {
+      float tempX = this.x + this.size/2;
+      float tempY = this.y + this.size/2;
+      if (dist(circle.getX(), circle.getY(),tempX, tempY) <= ((this.size/2)+ circle.getDiameter()/2)) {
+        circle.increaseSpeed();
+        this.visible = false;
+      }
+    }
+  }
+  
+
 }
 
 
@@ -111,10 +234,25 @@ public class Circle implements Comparable<Circle> {
     xSpeed = floor(random(MIN_SPEED, MAX_SPEED));
     ySpeed = floor(random(MIN_SPEED, MAX_SPEED));
     
-    this.dampen = 1;
+    this.dampen = 10;
     this.score = 0;
   }
   
+  
+  public void increaseSpeed() {
+    
+    if (this.xSpeed < 0) {
+      this.xSpeed -= 10;       
+    } else {
+      this.xSpeed += 10;
+    }
+    
+    if (this.ySpeed < 0) {
+      this.ySpeed -= 10;       
+    } else {
+      this.ySpeed += 10;
+    }
+  }
   
   @Override
   public int compareTo(Circle other) {
@@ -208,6 +346,7 @@ public class Circle implements Comparable<Circle> {
      
   }
   
+  
   public boolean isInvulnerable() {
     return this.invulnerable;
   }
@@ -244,13 +383,28 @@ public class Circle implements Comparable<Circle> {
     this.visible = true;
     this.diameter = START_SIZE * 2;
     this.score = 0;
-    this.x =  random(width/2)+50;
-    this.y =  random(height/2)+50;
+    this.x =  random(width-(START_SIZE*2));
+    this.y =  random(height-(START_SIZE*2));
     setXSpeed();
     setYSpeed();
     this.invulnerable = true;
     this.invulnerableCount = 0;
     
+  }
+  
+  
+  @Override
+  public boolean equals(Object circle) {    
+    if (circle instanceof Circle) {
+      Circle toBeCompared = (Circle) circle;
+      return toBeCompared.getName().equals(this.getName());
+    }
+    return false;
+  }
+  
+  @Override
+  public int hashCode() {
+    return Objects.hash(name);
   }
   
   public void setMax() {
