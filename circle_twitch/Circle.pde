@@ -25,7 +25,9 @@ public class Circle implements Comparable<Circle> {
   private float targetMass;
   private boolean isGettingBigger;
   
-  int score;
+  
+  private int score;
+  
   public Circle(String name, float x, float y, float radius) {
     this.name = name;
     this.x = x;
@@ -108,13 +110,10 @@ public class Circle implements Comparable<Circle> {
     // reset the radius as we are incrementing the diameter on eating
     this.radius = diameter/2;
     
-    if (this.x < 0 + radius || this.x > width - radius) {
-      this.xSpeed *= -1;
-    }
     
-    if (this.y < 0 + radius|| this.y > height - radius) {
-      this.ySpeed *= -1;
-    }
+    processHittingWall();
+    
+
     
 
     
@@ -138,6 +137,21 @@ public class Circle implements Comparable<Circle> {
     
   }
   
+  private void processHittingWall() {
+    if (this.x < 0 + radius) {
+      this.xSpeed = abs(this.xSpeed);
+    } else if (this.x > width - radius) {
+      this.xSpeed = -abs(this.xSpeed);
+    }
+    
+    if (this.y < 0 + radius) {
+      this.ySpeed = abs(this.ySpeed);
+    } else if (this.y > height - radius) {
+      this.ySpeed = -abs(this.ySpeed);
+    }
+  }
+  
+
   
   private void drawCircle() {
     ellipse(x, y, diameter, diameter);
